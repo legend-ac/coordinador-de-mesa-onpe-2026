@@ -99,30 +99,19 @@ export default defineConfig(() => {
       rollupOptions: {
         output: {
           manualChunks: (id: string) => {
-            // Firebase — se necesita para auth + Firestore (cargado al inicio pero en chunk separado)
-            if (id.includes('/node_modules/firebase') || id.includes('/node_modules/@firebase')) {
-              return 'vendor-firebase';
-            }
-            // ExcelJS — solo se necesita al exportar/importar Excel
-            if (id.includes('/node_modules/exceljs')) {
-              return 'vendor-excel';
-            }
-            // jsPDF — solo al generar informes PDF
-            if (id.includes('/node_modules/jspdf')) {
-              return 'vendor-pdf';
-            }
-            // JSZip — solo al descargar ZIP
-            if (id.includes('/node_modules/jszip')) {
-              return 'vendor-zip';
-            }
-            // QRCode — solo al mostrar códigos QR
-            if (id.includes('/node_modules/qrcode')) {
-              return 'vendor-qr';
-            }
-            // Lucide icons — grandes, van en su propio chunk
-            if (id.includes('/node_modules/lucide-react')) {
-              return 'vendor-icons';
-            }
+            // ⚠️ Firebase NO se separa: necesita estar en el bundle inicial
+            // para que la conexión a Firestore esté disponible de inmediato.
+
+            // ExcelJS — pesado (~1MB), solo al exportar/importar Excel
+            if (id.includes('/node_modules/exceljs')) return 'vendor-excel';
+            // jsPDF — solo al generar PDF
+            if (id.includes('/node_modules/jspdf')) return 'vendor-pdf';
+            // JSZip — solo al descargar ZIP del código fuente
+            if (id.includes('/node_modules/jszip')) return 'vendor-zip';
+            // QRCode — solo al ver códigos QR
+            if (id.includes('/node_modules/qrcode')) return 'vendor-qr';
+            // Lucide icons — separado para mejor caché
+            if (id.includes('/node_modules/lucide-react')) return 'vendor-icons';
           },
         },
       },

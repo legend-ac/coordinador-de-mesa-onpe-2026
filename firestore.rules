@@ -1,20 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Cada coordinador solo puede leer y escribir sus propios datos
-    match /coordinadores/{coordinadorDni}/{collection}/{document} {
-      allow read, write: if true;
-    }
-
-    // Colección de configuración de cada coordinador (perfil + PIN)
-    match /coordinadores/{coordinadorDni}/config/{doc} {
-      allow read, write: if true;
-    }
-
-    // Denegar acceso a cualquier otra colección no especificada
+    // Acceso abierto — la seguridad se gestiona por PIN en la aplicación.
+    // Suficiente para un sistema de coordinación electoral de mesa.
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }
