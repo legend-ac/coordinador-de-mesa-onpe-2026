@@ -36,10 +36,6 @@ import { ChangePinModal } from './components/ChangePinModal';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { QuickRestoreModal } from './components/QuickRestoreModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
-import { generateAndDownloadExcel } from './utils/excelExport';
-import { parseExcelFile } from './utils/excelImport';
-import { generateMesaReportPDF } from './utils/pdfExport';
-import { downloadProjectZip } from './utils/downloadProjectZip';
 import {
   AlertCircle,
   CheckCircle2,
@@ -71,7 +67,9 @@ export default function App() {
     return generateInitialMembers(perfil.mesas);
   });
 
-  const [loading, setLoading] = useState(true);
+  // Siempre mostramos la copia local inmediatamente. La sincronización remota
+  // continúa en segundo plano y nunca debe dejar la pantalla bloqueada.
+  const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
@@ -170,6 +168,7 @@ export default function App() {
 
       try {
         setIsSyncing(true);
+        setLoading(false);
         const batch = writeBatch(db);
         const initialMembers = generateInitialMembers(mesasParaInit);
         initialMembers.forEach((member) => {
@@ -211,8 +210,16 @@ export default function App() {
       colRef,
       (snapshot) => {
         if (snapshot.empty) {
-          // Primera vez: crear estructura vacía para las mesas del coordinador
-          initializeFirestoreData(perfil.mesas);
+          /*
+           * Un snapshot vacío desde la caché no prueba que la colección esté
+           * vacía en el servidor. Inicializar en ese punto podía sobrescribir
+           * datos existentes al recuperar la conexión. Solo creamos las mesas
+           * después de una respuesta confirmada del servidor.
+           */
+          setLoading(false);
+          if (!snapshot.metadata.fromCache) {
+            initializeFirestoreData(perfil.mesas);
+          }
         } else {
           const loaded: MesaMember[] = [];
           snapshot.forEach((d) => {
@@ -226,7 +233,13 @@ export default function App() {
       },
       (error) => {
         console.error('Firestore onSnapshot error:', error);
-        setFirestoreError('Error de conexión. Los datos pueden estar desactualizados.');
+        const message = error instanceof Error ? error.message : '';
+        const firestoreDisabled = /service_disabled|firestore api.*disabled/i.test(message);
+        setFirestoreError(
+          firestoreDisabled
+            ? 'La base de datos Firestore está desactivada en este proyecto. Los cambios quedan solo en este dispositivo hasta habilitarla.'
+            : 'Sin conexión con la base de datos. Puedes seguir trabajando: los cambios quedan guardados en este dispositivo y se sincronizarán al reconectar.'
+        );
         setLoading(false);
       }
     );
@@ -386,6 +399,7 @@ export default function App() {
   const handleExportPDF = async () => {
     try {
       showToast('Generando informe PDF...', 'info');
+      const { generateMesaReportPDF } = await import('./utils/pdfExport');
       await generateMesaReportPDF(members, selectedMesa);
       showToast('¡Informe PDF descargado!');
     } catch (err) {
@@ -398,6 +412,7 @@ export default function App() {
   const handleExportExcel = async () => {
     try {
       showToast('Generando Excel...', 'info');
+      const { generateAndDownloadExcel } = await import('./utils/excelExport');
       await generateAndDownloadExcel(members, `Control_Mesas_ONPE_${perfil.dni}.xlsx`);
       showToast('¡Excel descargado!');
     } catch (err) {
@@ -414,6 +429,7 @@ export default function App() {
     }
     try {
       showToast('Leyendo Excel...', 'info');
+      const { parseExcelFile } = await import('./utils/excelImport');
       const importedRows = await parseExcelFile(file);
       if (importedRows.length === 0) {
         showToast('No se encontraron datos válidos.', 'error');
@@ -431,6 +447,7 @@ export default function App() {
   const handleDownloadZip = async () => {
     try {
       showToast('Empaquetando código fuente...', 'info');
+      const { downloadProjectZip } = await import('./utils/downloadProjectZip');
       await downloadProjectZip();
       showToast('¡ZIP descargado!');
     } catch (err) {

@@ -1,5 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore, collection, doc } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  Firestore,
+  collection,
+  doc,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import {
   getAuth,
   signInWithPopup,
@@ -12,10 +20,30 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-export const db: Firestore = getFirestore(
-  app,
-  (firebaseConfig as any).firestoreDatabaseId || '(default)'
-);
+const databaseId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
+
+/*
+ * Mantiene una copia local duradera de Firestore. Así, una edición no se pierde
+ * si se corta la red: Firestore la encola y la sincroniza cuando el servicio
+ * vuelva a estar disponible. El fallback evita errores durante HMR/desarrollo
+ * si otra instancia ya inicializó Firestore.
+ */
+let firestore: Firestore;
+try {
+  firestore = initializeFirestore(
+    app,
+    {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    },
+    databaseId,
+  );
+} catch {
+  firestore = getFirestore(app, databaseId);
+}
+
+export const db = firestore;
 
 // ─── Rutas con scope por coordinador ─────────────────────────────────────────
 

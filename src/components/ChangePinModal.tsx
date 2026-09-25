@@ -3,6 +3,7 @@ import { KeyRound, Check, X, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { setDoc } from 'firebase/firestore';
 import { getPerfilDocRef } from '../firebase';
 import { useCoordinator } from '../context/CoordinatorContext';
+import { updateCachedCoordinator } from './AuthGate';
 
 interface ChangePinModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({
 
       // Actualizar perfil en memoria para que la sesión actual use el nuevo PIN
       setPerfil((prev) => ({ ...prev, pin: newPin, updatedAt: new Date().toISOString() }));
+      updateCachedCoordinator({ pin: newPin, updatedAt: new Date().toISOString() });
 
       onPinChanged();
       setSuccess('¡Clave actualizada con éxito!');
