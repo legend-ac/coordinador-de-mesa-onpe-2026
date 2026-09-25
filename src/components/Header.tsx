@@ -12,7 +12,7 @@ import {
   FileSpreadsheet,
   FileText,
 } from 'lucide-react';
-import { COORDINADOR_INFO } from '../utils/whatsapp';
+import { useCoordinator } from '../context/CoordinatorContext';
 import { logoutSecuritySession } from './AuthGate';
 
 interface HeaderProps {
@@ -46,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   isReadOnly,
   onToggleReadOnly,
 }) => {
+  const { perfil } = useCoordinator();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,8 +61,8 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="bg-[#00223A] text-white border-b border-[#0A111D] sticky top-0 z-30 shadow-lg">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          
-          {/* Brand & Coordinator Title */}
+
+          {/* Brand & Coordinator */}
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-[#D31027] text-white font-black text-xs flex items-center justify-center flex-shrink-0 shadow-sm border border-white/20">
               ONPE
@@ -71,23 +72,26 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-xs sm:text-sm font-extrabold text-white truncate">
                   Coordinador de Mesa
                 </span>
-                <span className="text-[10px] sm:text-xs bg-[#001726] text-white border border-[#213555] px-2 py-0.5 rounded font-mono font-bold truncate max-w-[190px]">
-                  {mesas && mesas.length > 0 ? mesas.join(' • ') : 'Mesas 51, 52, 53'}
+                <span className="text-[10px] sm:text-xs bg-[#001726] text-white border border-[#213555] px-2 py-0.5 rounded font-mono font-bold truncate max-w-[200px]">
+                  {mesas && mesas.length > 0 ? mesas.join(' • ') : 'Sin mesas'}
                 </span>
                 {isSyncing && (
                   <span className="w-2 h-2 rounded-full bg-[#D31027] animate-ping" title="Sincronizando..." />
                 )}
               </div>
               <p className="text-[11px] text-slate-300 truncate hidden sm:block">
-                Responsable: <strong className="text-white font-bold">{COORDINADOR_INFO.nombre}</strong> • Elecciones Regionales y Municipales 2026
+                Responsable:{' '}
+                <strong className="text-white font-bold">{perfil.nombreCompleto}</strong>
+                {perfil.dni && <span className="text-slate-400"> · DNI {perfil.dni}</span>}
+                {' • '}Elecciones Regionales y Municipales 2026
               </p>
             </div>
           </div>
 
-          {/* Quick Actions Bar */}
+          {/* Acciones */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            
-            {/* Seguro de Datos / Bloqueo contra modificaciones (Lock) */}
+
+            {/* Seguro de datos */}
             <button
               onClick={onToggleReadOnly}
               type="button"
@@ -96,90 +100,90 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'bg-[#D31027] text-white border-red-500 shadow-md font-black'
                   : 'bg-[#001726] hover:bg-[#003358] text-white border-[#213555]'
               }`}
-              title={isReadOnly ? 'Seguro ACTIVO: Datos protegidos contra cambios. Clic para desbloquear edición.' : 'Activar seguro de datos'}
+              title={isReadOnly ? 'Seguro ACTIVO — clic para desbloquear' : 'Activar seguro de datos'}
             >
-              {isReadOnly ? <Lock className="w-3.5 h-3.5 text-white" /> : <Unlock className="w-3.5 h-3.5 text-slate-300" />}
+              {isReadOnly ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5 text-slate-300" />}
               <span className="hidden sm:inline">{isReadOnly ? 'Seguro Activo' : 'Poner Seguro'}</span>
             </button>
 
-            {/* RECUPERAR / SUBIR EXCEL RELLENADO */}
+            {/* Subir Excel */}
             <button
               onClick={onOpenRestoreModal}
               type="button"
               className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#D31027] hover:bg-[#B70E22] text-white text-xs font-black flex items-center gap-1 transition-all cursor-pointer border border-red-400 shadow-md"
-              title="Subir tu archivo Excel con datos para colocarlos automáticamente"
+              title="Subir Excel con datos"
             >
-              <Upload className="w-3.5 h-3.5 text-white" />
+              <Upload className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Subir Mi Excel</span>
             </button>
 
-            {/* Descargar Informe PDF Oficial para Imprimir */}
+            {/* Informe PDF */}
             <button
               onClick={onExportPDF}
               type="button"
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#001726] hover:bg-[#003358] text-white border border-[#213555] text-xs font-bold shadow-xs transition-all cursor-pointer"
-              title="Descargar Informe Oficial en PDF para imprimir o enviar"
+              title="Descargar Informe PDF"
             >
               <FileText className="w-3.5 h-3.5 text-red-400" />
               <span className="hidden sm:inline">Informe PDF</span>
             </button>
 
-            {/* Google Sheets en Vivo */}
+            {/* Google Sheets */}
             <button
               onClick={onOpenGoogleSheetsModal}
               type="button"
               className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#001726] hover:bg-[#003358] text-white border border-[#213555] text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-              title="Conectar y sincronizar datos en vivo con Google Sheets"
+              title="Sincronizar con Google Sheets"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-blue-300" />
               <span className="hidden sm:inline">Google Sheets</span>
             </button>
 
-            {/* Download Excel Button */}
+            {/* Excel */}
             <button
               onClick={onExportExcel}
               type="button"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 active:bg-slate-200 text-[#00223A] text-xs font-black shadow-sm transition-all cursor-pointer border border-white"
-              title="Descargar archivo Excel (.xlsx) oficial"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-[#00223A] text-xs font-black shadow-sm transition-all cursor-pointer border border-white"
+              title="Descargar Excel (.xlsx)"
             >
               <Download className="w-3.5 h-3.5 text-[#00223A]" />
-              <span>Excel (.xlsx)</span>
+              <span>Excel</span>
             </button>
 
-            {/* Cambiar Clave PIN Personalizada */}
+            {/* Cambiar PIN */}
             <button
               onClick={onOpenChangePin}
               type="button"
               className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-[#001726] hover:bg-[#003358] text-white text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer border border-[#213555]"
-              title="Cambiar mi clave PIN personalizada"
+              title="Cambiar PIN"
             >
               <KeyRound className="w-3.5 h-3.5 text-slate-300" />
               <span className="hidden md:inline">Clave</span>
             </button>
 
-            {/* Official WhatsApp Message modal trigger */}
+            {/* WhatsApp */}
             <button
               onClick={onOpenWhatsAppModal}
               type="button"
               className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#001726] hover:bg-[#003358] text-white text-xs font-bold flex items-center gap-1 transition-all cursor-pointer border border-[#213555]"
-              title="Ver el mensaje oficial de WhatsApp Business"
+              title="Mensaje WhatsApp"
             >
               <MessageSquare className="w-3.5 h-3.5 text-red-400" />
               <span className="hidden sm:inline">WhatsApp</span>
             </button>
 
-            {/* Download Project ZIP directly to PC */}
+            {/* ZIP */}
             <button
               onClick={onDownloadZip}
               type="button"
               className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#001726] hover:bg-[#003358] text-slate-300 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer border border-[#213555]"
-              title="Descargar todo el código fuente del proyecto en un archivo .ZIP"
+              title="Descargar código fuente .ZIP"
             >
               <FolderDown className="w-3.5 h-3.5 text-slate-400" />
               <span className="hidden sm:inline">ZIP</span>
             </button>
 
-            {/* Hidden direct import file input */}
+            {/* Input oculto para importar */}
             <input
               ref={fileInputRef}
               type="file"
@@ -194,25 +198,24 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={onResetData}
                 type="button"
                 className="p-1.5 rounded-lg bg-[#001726] hover:bg-[#D31027] text-slate-400 hover:text-white text-xs transition-all cursor-pointer hidden sm:flex items-center border border-[#213555]"
-                title="Restablecer datos vacíos"
+                title="Reiniciar datos"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
             )}
 
-            {/* Bloquear / Cerrar Sesión Segura */}
+            {/* Cerrar sesión */}
             <button
               onClick={logoutSecuritySession}
               type="button"
               className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-[#D31027]/20 hover:bg-[#D31027] text-white text-xs font-bold flex items-center gap-1 transition-all cursor-pointer border border-[#D31027]"
-              title="Cerrar sesión y bloquear la pantalla con PIN"
+              title="Cerrar sesión"
             >
-              <LogOut className="w-3.5 h-3.5 text-red-400 group-hover:text-white" />
-              <span className="hidden sm:inline">Bloquear</span>
+              <LogOut className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden sm:inline">Salir</span>
             </button>
 
           </div>
-
         </div>
       </div>
     </header>

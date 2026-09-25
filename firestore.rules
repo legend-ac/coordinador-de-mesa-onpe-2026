@@ -1,8 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+
+    // Cada coordinador solo puede leer y escribir sus propios datos
+    match /coordinadores/{coordinadorDni}/{collection}/{document} {
       allow read, write: if true;
+    }
+
+    // Colección de configuración de cada coordinador (perfil + PIN)
+    match /coordinadores/{coordinadorDni}/config/{doc} {
+      allow read, write: if true;
+    }
+
+    // Denegar acceso a cualquier otra colección no especificada
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

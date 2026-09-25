@@ -1,20 +1,29 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * App.tsx — Multi-coordinador con Firestore.
+ * FIXES:
+ *  - Loop infinito de suscripción a Firestore (useCallback + useEffect circular)
+ *  - Datos scoped por coordinador en: coordinadores/{dni}/miembros/
+ *  - initializeData es función pura sin dependencia en el estado members
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  collection,
   onSnapshot,
-  doc,
   writeBatch,
   setDoc,
 } from 'firebase/firestore';
-import { db, MEMBERS_COLLECTION } from './firebase';
+import {
+  db,
+  getMembersCollectionRef,
+  getMemberDocRef,
+} from './firebase';
+import { useCoordinator } from './context/CoordinatorContext';
 import {
   MesaMember,
-  INITIAL_MEMBERS_DATA,
+  generateInitialMembers,
   DEFAULT_MESAS,
 } from './types';
 import { Header } from './components/Header';
@@ -38,52 +47,49 @@ import {
   LayoutGrid,
   Search,
   Edit3,
-  Lock,
   ShieldCheck,
 } from 'lucide-react';
 
 const LOCAL_STORAGE_BACKUP_KEY = 'onpe_members_data_backup';
 
 export default function App() {
-  // Load initial state with local storage fallback if present
+  const { perfil } = useCoordinator();
+
+  // ── Estado principal ────────────────────────────────────────────────────────
   const [members, setMembers] = useState<MesaMember[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(LOCAL_STORAGE_BACKUP_KEY);
+        const saved = localStorage.getItem(`${LOCAL_STORAGE_BACKUP_KEY}_${perfil.dni}`);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
       } catch (e) {
-        console.warn('Error reading backup from local storage:', e);
+        console.warn('Error leyendo backup local:', e);
       }
     }
-    return INITIAL_MEMBERS_DATA;
+    return generateInitialMembers(perfil.mesas);
   });
 
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [selectedMesa, setSelectedMesa] = useState<string | 'TODAS'>('Mesa 51');
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
-  // Modal to edit mesa numbers
+  const [selectedMesa, setSelectedMesa] = useState<string | 'TODAS'>(
+    perfil.mesas[0] || 'TODAS'
+  );
+
+  // Modales
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [mesaToEdit, setMesaToEdit] = useState<string>('Mesa 51');
-
-  // Modal to change custom private PIN
+  const [mesaToEdit, setMesaToEdit] = useState<string>(perfil.mesas[0] || '');
   const [isChangePinOpen, setIsChangePinOpen] = useState(false);
-
-  // Modal for Google Sheets Live Sync
   const [isGoogleSheetsOpen, setIsGoogleSheetsOpen] = useState(false);
-
-  // Modal to Restore Previous / Upload User's Excel
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
 
-  // Seguro de datos (Modo Solo Lectura para proteger contra modificaciones involuntarias)
+  // Seguro de datos
   const [isReadOnly, setIsReadOnly] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('onpe_data_locked') === 'true';
+      return localStorage.getItem(`onpe_data_locked_${perfil.dni}`) === 'true';
     }
     return false;
   });
@@ -91,25 +97,28 @@ export default function App() {
   const toggleReadOnly = () => {
     const next = !isReadOnly;
     setIsReadOnly(next);
-    localStorage.setItem('onpe_data_locked', String(next));
-    if (next) {
-      showToast('🔒 Seguro de datos ACTIVADO. Los datos quedan protegidos contra cambios.');
-    } else {
-      showToast('🔓 Seguro desactivado. Edición directa habilitada.');
-    }
+    localStorage.setItem(`onpe_data_locked_${perfil.dni}`, String(next));
+    showToast(
+      next
+        ? '🔒 Seguro de datos ACTIVADO.'
+        : '🔓 Seguro desactivado. Edición habilitada.'
+    );
   };
 
-  // Mobile-first responsive view mode
+  // Vista
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() =>
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'cards' : 'table'
   );
 
-  // Search & Filter
+  // Búsqueda y filtros
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{
+    text: string;
+    type: 'success' | 'info' | 'error';
+  } | null>(null);
 
-  // WhatsApp modal state
+  // WhatsApp modal
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [previewTarget, setPreviewTarget] = useState<{ nombre: string; celular: string }>({
     nombre: '',
@@ -121,157 +130,145 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleDownloadZip = async () => {
-    try {
-      showToast('Empaquetando código fuente en .zip...', 'info');
-      await downloadProjectZip();
-      showToast('¡Proyecto .zip descargado con éxito!');
-    } catch (err) {
-      console.error('Error al empaquetar zip:', err);
-      showToast('Error al descargar el archivo .zip', 'error');
-    }
-  };
-
-  // Dynamically obtain unique mesas list from members
-  const uniqueMesas = useMemo(() => {
-    const list: string[] = [];
-    members.forEach((m) => {
-      if (m.mesa && !list.includes(m.mesa)) {
-        list.push(m.mesa);
-      }
-    });
-    return list.length > 0 ? list : DEFAULT_MESAS;
-  }, [members]);
-
-  // Ensure selectedMesa points to an existing mesa
-  useEffect(() => {
-    if (selectedMesa !== 'TODAS' && !uniqueMesas.includes(selectedMesa)) {
-      if (uniqueMesas.length > 0) {
-        setSelectedMesa(uniqueMesas[0]);
-      } else {
-        setSelectedMesa('TODAS');
-      }
-    }
-  }, [uniqueMesas, selectedMesa]);
-
-  // Keep a local copy always saved so user never loses data across turns or connectivity dips
+  // ── Backup local (sin loops) ────────────────────────────────────────────────
   useEffect(() => {
     if (members && members.length > 0) {
       try {
-        localStorage.setItem(LOCAL_STORAGE_BACKUP_KEY, JSON.stringify(members));
+        localStorage.setItem(
+          `${LOCAL_STORAGE_BACKUP_KEY}_${perfil.dni}`,
+          JSON.stringify(members)
+        );
       } catch (e) {
-        console.warn('Could not backup to localStorage:', e);
+        console.warn('No se pudo guardar backup local:', e);
       }
     }
-  }, [members]);
+  }, [members, perfil.dni]);
 
-  // Initialize Firestore only if collection is completely non-existent and local backup is empty
-  const initializeFirestoreData = useCallback(async () => {
-    try {
-      setIsSyncing(true);
-      const batch = writeBatch(db);
-      const initialSource = members.length > 0 ? members : INITIAL_MEMBERS_DATA;
+  // ── Mesas únicas disponibles ────────────────────────────────────────────────
+  const uniqueMesas = useMemo(() => {
+    const list: string[] = [];
+    members.forEach((m) => {
+      if (m.mesa && !list.includes(m.mesa)) list.push(m.mesa);
+    });
+    return list.length > 0 ? list : (perfil.mesas.length > 0 ? perfil.mesas : DEFAULT_MESAS);
+  }, [members, perfil.mesas]);
 
-      initialSource.forEach((member) => {
-        const ref = doc(db, MEMBERS_COLLECTION, member.id);
-        batch.set(ref, {
-          ...member,
-          updatedAt: new Date().toISOString(),
-        });
-      });
-      await batch.commit();
-      setIsSyncing(false);
-      showToast('Mesas sincronizadas.');
-    } catch (err) {
-      console.error('Error al inicializar Firestore:', err);
-      setIsSyncing(false);
-      showToast('Error al conectar con la base de datos.', 'error');
-    }
-  }, [members]);
-
-  // Listen to Firestore real-time changes
+  // Asegura que selectedMesa apunte a una mesa existente
   useEffect(() => {
-    const colRef = collection(db, MEMBERS_COLLECTION);
+    if (selectedMesa !== 'TODAS' && !uniqueMesas.includes(selectedMesa)) {
+      setSelectedMesa(uniqueMesas[0] || 'TODAS');
+    }
+  }, [uniqueMesas, selectedMesa]);
+
+  // ── Inicializar datos vacíos en Firestore (función PURA, sin deps en members) ─
+  const hasInitializedRef = useRef(false);
+
+  const initializeFirestoreData = useCallback(
+    async (mesasParaInit: string[]) => {
+      if (hasInitializedRef.current) return;
+      hasInitializedRef.current = true;
+
+      try {
+        setIsSyncing(true);
+        const batch = writeBatch(db);
+        const initialMembers = generateInitialMembers(mesasParaInit);
+        initialMembers.forEach((member) => {
+          batch.set(getMemberDocRef(perfil.dni, member.id), {
+            ...member,
+            updatedAt: new Date().toISOString(),
+          });
+        });
+        await batch.commit();
+        setIsSyncing(false);
+        showToast('Mesas inicializadas y listas.');
+      } catch (err) {
+        console.error('Error inicializando Firestore:', err);
+        setIsSyncing(false);
+        // Fallback: usar datos locales si Firestore falla
+        setMembers(generateInitialMembers(mesasParaInit));
+        setLoading(false);
+        setFirestoreError('Sin conexión a la base de datos. Trabajando en modo offline.');
+      }
+    },
+    [perfil.dni]
+    // ✅ NO incluye `members` → evita el loop infinito
+  );
+
+  // ── Suscripción en tiempo real a Firestore ──────────────────────────────────
+  // FIX: este useEffect solo depende de perfil.dni y de initializeFirestoreData
+  // (cuya referencia solo cambia si cambia perfil.dni).
+  // Nunca depende de `members`, eliminando el loop de re-suscripción.
+  useEffect(() => {
+    if (!perfil.dni) return;
+
+    hasInitializedRef.current = false;
+    setLoading(true);
+    setFirestoreError(null);
+
+    const colRef = getMembersCollectionRef(perfil.dni);
 
     const unsubscribe = onSnapshot(
       colRef,
       (snapshot) => {
         if (snapshot.empty) {
-          initializeFirestoreData();
+          // Primera vez: crear estructura vacía para las mesas del coordinador
+          initializeFirestoreData(perfil.mesas);
         } else {
           const loaded: MesaMember[] = [];
           snapshot.forEach((d) => {
             const data = d.data() as MesaMember;
-            let currentCargo = data.cargo;
-            if (data.id?.endsWith('_pos_2') && currentCargo === ('Suplente' as any)) {
-              currentCargo = 'Secretario';
-            }
-
-            loaded.push({
-              ...data,
-              id: d.id,
-              cargo: currentCargo,
-            });
+            loaded.push({ ...data, id: d.id });
           });
           loaded.sort((a, b) => (a.orden || 0) - (b.orden || 0));
-
-          // Merge safety: If remote is empty but local has names, preserve local!
-          setMembers((prevLocal) => {
-            if (!prevLocal || prevLocal.length === 0) return loaded;
-            return loaded.map((remote) => {
-              const localMatch = prevLocal.find((l) => l.id === remote.id);
-              if (localMatch) {
-                return {
-                  ...remote,
-                  nombreCompleto: remote.nombreCompleto || localMatch.nombreCompleto || '',
-                  dni: remote.dni || localMatch.dni || '',
-                  celular: remote.celular || localMatch.celular || '',
-                  observaciones: remote.observaciones || localMatch.observaciones || '',
-                  estadoContacto: remote.estadoContacto || localMatch.estadoContacto || 'Pendiente',
-                  verificado: remote.verificado || localMatch.verificado || 'No',
-                };
-              }
-              return remote;
-            });
-          });
-
+          setMembers(loaded);
           setLoading(false);
         }
       },
       (error) => {
         console.error('Firestore onSnapshot error:', error);
+        setFirestoreError('Error de conexión. Los datos pueden estar desactualizados.');
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [initializeFirestoreData]);
+  }, [perfil.dni, perfil.mesas, initializeFirestoreData]);
 
-  // Update a single member
+  // ── Actualizar un miembro ───────────────────────────────────────────────────
   const handleUpdateMember = async (id: string, updates: Partial<MesaMember>) => {
     if (isReadOnly) {
-      showToast('⚠️ Seguro de datos activo. Desactiva el seguro para editar.', 'info');
+      showToast('⚠️ Seguro de datos activo. Desactívalo para editar.', 'info');
       return;
     }
 
+    // Optimistic update
     setMembers((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...updates, updatedAt: new Date().toISOString() } : m))
+      prev.map((m) =>
+        m.id === id ? { ...m, ...updates, updatedAt: new Date().toISOString() } : m
+      )
     );
 
     try {
       setIsSyncing(true);
-      const docRef = doc(db, MEMBERS_COLLECTION, id);
-      await setDoc(docRef, { ...updates, updatedAt: new Date().toISOString() }, { merge: true });
+      await setDoc(
+        getMemberDocRef(perfil.dni, id),
+        { ...updates, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
       setIsSyncing(false);
     } catch (err) {
       console.error('Error guardando en Firestore:', err);
       setIsSyncing(false);
-      showToast('Guardado localmente. Se sincronizará con Firestore al reconectar.', 'info');
+      showToast('Guardado localmente. Se sincronizará al reconectar.', 'info');
     }
   };
 
-  // Restore imported rows or backup data to both local state and Firestore
+  // ── Restaurar lista completa de miembros ────────────────────────────────────
   const handleRestoreMembersList = async (incomingMembers: Partial<MesaMember>[]) => {
+    if (isReadOnly) {
+      showToast('⚠️ Desactiva el seguro antes de restaurar.', 'info');
+      return;
+    }
     try {
       setIsSyncing(true);
       const batch = writeBatch(db);
@@ -281,23 +278,19 @@ export default function App() {
           if (item.id && item.id === current.id) return true;
           return item.mesa === current.mesa && item.cargo === current.cargo;
         });
-
-        if (!match && incomingMembers[index]) {
-          match = incomingMembers[index];
-        }
+        if (!match && incomingMembers[index]) match = incomingMembers[index];
 
         if (match) {
-          const docRef = doc(db, MEMBERS_COLLECTION, current.id);
           const merged: Partial<MesaMember> = {
-            nombreCompleto: match.nombreCompleto !== undefined ? match.nombreCompleto : current.nombreCompleto,
-            dni: match.dni !== undefined ? match.dni : current.dni,
-            celular: match.celular !== undefined ? match.celular : current.celular,
+            nombreCompleto: match.nombreCompleto ?? current.nombreCompleto,
+            dni: match.dni ?? current.dni,
+            celular: match.celular ?? current.celular,
             estadoContacto: match.estadoContacto || current.estadoContacto,
-            observaciones: match.observaciones !== undefined ? match.observaciones : current.observaciones,
+            observaciones: match.observaciones ?? current.observaciones,
             verificado: match.verificado || current.verificado,
             updatedAt: new Date().toISOString(),
           };
-          batch.set(docRef, merged, { merge: true });
+          batch.set(getMemberDocRef(perfil.dni, current.id), merged, { merge: true });
           return { ...current, ...merged };
         }
         return current;
@@ -306,7 +299,7 @@ export default function App() {
       setMembers(updated);
       await batch.commit();
       setIsSyncing(false);
-      showToast('¡Excel importado y colocado automáticamente en tus mesas!');
+      showToast('¡Datos importados y sincronizados!');
     } catch (err) {
       console.error('Error al restaurar:', err);
       setIsSyncing(false);
@@ -314,7 +307,7 @@ export default function App() {
     }
   };
 
-  // Quick Text parser for pasting list of members
+  // ── Parser de texto pegado ──────────────────────────────────────────────────
   const handleRestoreFromText = async (text: string) => {
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) return;
@@ -341,87 +334,86 @@ export default function App() {
 
     if (parsed.length > 0) {
       await handleRestoreMembersList(parsed);
-      showToast(`¡Se procesaron ${parsed.length} miembros del texto pegado!`);
+      showToast(`¡Se procesaron ${parsed.length} miembros del texto!`);
     }
   };
 
-  // Rename a mesa across all its 9 members in Firestore
+  // ── Renombrar mesa ──────────────────────────────────────────────────────────
   const handleSaveMesaName = async (oldMesa: string, newMesa: string) => {
     if (isReadOnly) {
-      showToast('⚠️ Desactiva el seguro para cambiar el nombre de mesa.', 'info');
+      showToast('⚠️ Desactiva el seguro para renombrar mesas.', 'info');
       return;
     }
-
     try {
       setIsSyncing(true);
       const batch = writeBatch(db);
 
       const updatedMembers = members.map((m) => {
         if (m.mesa === oldMesa) {
-          const docRef = doc(db, MEMBERS_COLLECTION, m.id);
-          batch.update(docRef, { mesa: newMesa, updatedAt: new Date().toISOString() });
+          batch.set(
+            getMemberDocRef(perfil.dni, m.id),
+            { mesa: newMesa, updatedAt: new Date().toISOString() },
+            { merge: true }
+          );
           return { ...m, mesa: newMesa, updatedAt: new Date().toISOString() };
         }
         return m;
       });
 
       setMembers(updatedMembers);
-      if (selectedMesa === oldMesa) {
-        setSelectedMesa(newMesa);
-      }
+      if (selectedMesa === oldMesa) setSelectedMesa(newMesa);
 
       await batch.commit();
       setIsSyncing(false);
-      showToast(`¡Mesa actualizada a "${newMesa}"!`);
+      showToast(`Mesa actualizada a "${newMesa}"`);
     } catch (err) {
-      console.error('Error al actualizar nombre de mesa:', err);
+      console.error('Error al renombrar mesa:', err);
       setIsSyncing(false);
-      showToast('Error al guardar el nuevo número de mesa en Firestore.', 'error');
+      showToast('Error al guardar el nuevo nombre de mesa.', 'error');
     }
   };
 
   const handleOpenEditMesa = (mesa: string) => {
     if (isReadOnly) {
-      showToast('⚠️ Seguro de datos activo. Desactívalo primero.', 'info');
+      showToast('⚠️ Seguro activo. Desactívalo primero.', 'info');
       return;
     }
     setMesaToEdit(mesa);
     setIsEditModalOpen(true);
   };
 
-  // Export to Professional PDF (Pure ONPE: Navy & Red)
+  // ── Exportar PDF ────────────────────────────────────────────────────────────
   const handleExportPDF = async () => {
     try {
-      showToast('Generando informe oficial en PDF...', 'info');
+      showToast('Generando informe PDF...', 'info');
       await generateMesaReportPDF(members, selectedMesa);
-      showToast('¡Informe PDF descargado con éxito!');
+      showToast('¡Informe PDF descargado!');
     } catch (err) {
-      console.error('Error al exportar PDF:', err);
+      console.error(err);
       showToast('Error al generar el PDF.', 'error');
     }
   };
 
-  // Export to Excel
+  // ── Exportar Excel ──────────────────────────────────────────────────────────
   const handleExportExcel = async () => {
     try {
-      showToast('Generando archivo Excel...', 'info');
-      await generateAndDownloadExcel(members, 'Control_Mesas_ONPE_Andy_Cordova.xlsx');
+      showToast('Generando Excel...', 'info');
+      await generateAndDownloadExcel(members, `Control_Mesas_ONPE_${perfil.dni}.xlsx`);
       showToast('¡Excel descargado!');
     } catch (err) {
-      console.error('Error al exportar Excel:', err);
+      console.error(err);
       showToast('Error al generar Excel.', 'error');
     }
   };
 
-  // Import from Excel
+  // ── Importar Excel ──────────────────────────────────────────────────────────
   const handleImportExcel = async (file: File) => {
     if (isReadOnly) {
-      showToast('⚠️ Desactiva el seguro de datos antes de importar Excel.', 'info');
+      showToast('⚠️ Desactiva el seguro antes de importar Excel.', 'info');
       return;
     }
-
     try {
-      showToast('Leyendo archivo Excel...', 'info');
+      showToast('Leyendo Excel...', 'info');
       const importedRows = await parseExcelFile(file);
       if (importedRows.length === 0) {
         showToast('No se encontraron datos válidos.', 'error');
@@ -429,24 +421,33 @@ export default function App() {
       }
       await handleRestoreMembersList(importedRows);
     } catch (err) {
-      console.error('Error al importar Excel:', err);
+      console.error(err);
       setIsSyncing(false);
-      showToast('Error al procesar el archivo Excel.', 'error');
+      showToast('Error al procesar el Excel.', 'error');
     }
   };
 
-  // Reset Data confirmation
+  // ── Descargar ZIP ───────────────────────────────────────────────────────────
+  const handleDownloadZip = async () => {
+    try {
+      showToast('Empaquetando código fuente...', 'info');
+      await downloadProjectZip();
+      showToast('¡ZIP descargado!');
+    } catch (err) {
+      console.error(err);
+      showToast('Error al descargar ZIP.', 'error');
+    }
+  };
+
+  // ── Resetear datos ──────────────────────────────────────────────────────────
   const handleResetData = () => {
     if (isReadOnly) {
-      showToast('⚠️ Acción bloqueada por el seguro de datos.', 'info');
+      showToast('⚠️ Acción bloqueada por el seguro.', 'info');
       return;
     }
-    if (
-      window.confirm(
-        '¿Deseas reiniciar los datos de las mesas a su estado inicial vacío?'
-      )
-    ) {
-      initializeFirestoreData();
+    if (window.confirm('¿Deseas reiniciar los datos a vacío? Se perderá la información actual.')) {
+      hasInitializedRef.current = false;
+      initializeFirestoreData(perfil.mesas);
     }
   };
 
@@ -455,29 +456,29 @@ export default function App() {
     setIsWhatsAppModalOpen(true);
   };
 
-  // Filtered members for display
+  // ── Miembros filtrados para la vista ────────────────────────────────────────
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
       if (selectedMesa !== 'TODAS' && m.mesa !== selectedMesa) return false;
       if (statusFilter !== 'TODOS' && m.estadoContacto !== statusFilter) return false;
-
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = m.nombreCompleto?.toLowerCase().includes(q);
-        const matchDni = m.dni?.includes(q);
-        const matchPhone = m.celular?.includes(q);
-        const matchCargo = m.cargo?.toLowerCase().includes(q);
-        if (!matchName && !matchDni && !matchPhone && !matchCargo) return false;
+        if (
+          !m.nombreCompleto?.toLowerCase().includes(q) &&
+          !m.dni?.includes(q) &&
+          !m.celular?.includes(q) &&
+          !m.cargo?.toLowerCase().includes(q)
+        ) return false;
       }
-
       return true;
     });
   }, [members, selectedMesa, statusFilter, searchQuery]);
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col antialiased bg-[#050912] text-white">
-      
-      {/* Toast Notification (Pure ONPE: Red & White on Dark) */}
+
+      {/* Toast */}
       {toastMessage && (
         <div className="fixed top-4 right-4 z-50 animate-in fade-in slide-in-from-top-3">
           <div
@@ -490,16 +491,23 @@ export default function App() {
             }`}
           >
             {toastMessage.type === 'error' ? (
-              <AlertCircle className="w-4 h-4 text-white" />
+              <AlertCircle className="w-4 h-4" />
             ) : (
-              <CheckCircle2 className="w-4 h-4 text-white" />
+              <CheckCircle2 className="w-4 h-4" />
             )}
             <span>{toastMessage.text}</span>
           </div>
         </div>
       )}
 
-      {/* Main Header (Pure ONPE Navy & Red) */}
+      {/* Error de Firestore */}
+      {firestoreError && (
+        <div className="bg-yellow-900/30 border-b border-yellow-700 text-yellow-300 text-xs py-1.5 px-4 text-center font-medium">
+          ⚠️ {firestoreError}
+        </div>
+      )}
+
+      {/* Header */}
       <Header
         mesas={uniqueMesas}
         onExportExcel={handleExportExcel}
@@ -516,39 +524,34 @@ export default function App() {
         onToggleReadOnly={toggleReadOnly}
       />
 
-      {/* PWA In-App Install Banner */}
       <PWAInstallBanner />
 
-      {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-6 py-2.5 sm:py-4 space-y-2.5 sm:space-y-4">
-        
-        {/* Seguro de Datos Banner notice when locked */}
+
+        {/* Banner seguro */}
         {isReadOnly && (
-          <div className="bg-[#00223A] border border-red-500/80 rounded-xl p-2.5 px-3.5 flex items-center justify-between gap-2 text-white">
+          <div className="bg-[#00223A] border border-red-500/80 rounded-xl p-2.5 px-3.5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs font-bold">
               <ShieldCheck className="w-4 h-4 text-red-500 flex-shrink-0" />
-              <span>
-                <strong>Seguro Global de Datos Activo:</strong> Tus datos guardados están blindados contra modificaciones accidentales.
-              </span>
+              <span><strong>Seguro Global Activo:</strong> Datos protegidos contra cambios accidentales.</span>
             </div>
             <button
               type="button"
               onClick={toggleReadOnly}
               className="text-xs font-black underline hover:text-red-400 flex-shrink-0 cursor-pointer"
             >
-              Desbloquear edición
+              Desbloquear
             </button>
           </div>
         )}
 
-        {/* Mesa Navigation Bar (Segmented Control + Edit Mesa Option) */}
+        {/* Selector de mesa */}
         <div className="bg-[#0A111D] rounded-xl p-1.5 border border-[#16253B] shadow-xs flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
           <div className="flex items-center gap-1 flex-1 min-w-0">
             {uniqueMesas.map((m) => {
               const count = members.filter((x) => x.mesa === m).length;
               const conf = members.filter((x) => x.mesa === m && x.estadoContacto === 'Confirmado').length;
               const isSelected = selectedMesa === m;
-
               return (
                 <div key={m} className="flex-1 flex items-center min-w-0">
                   <button
@@ -564,14 +567,12 @@ export default function App() {
                       ({conf}/{count})
                     </span>
                   </button>
-
-                  {/* 1-tap edit button for active table (only if not locked) */}
                   {isSelected && !isReadOnly && (
                     <button
                       type="button"
                       onClick={() => handleOpenEditMesa(m)}
                       className="ml-1 p-1.5 text-white hover:bg-[#001726] rounded-lg cursor-pointer flex-shrink-0"
-                      title={`Editar número de "${m}"`}
+                      title={`Editar "${m}"`}
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
@@ -579,7 +580,6 @@ export default function App() {
                 </div>
               );
             })}
-
             <button
               onClick={() => setSelectedMesa('TODAS')}
               className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex-shrink-0 ${
@@ -592,12 +592,14 @@ export default function App() {
             </button>
           </div>
 
-          {/* Desktop/Tablet View Mode Switcher */}
+          {/* Switcher vista */}
           <div className="hidden sm:inline-flex p-0.5 bg-[#001726] border border-[#16253B] rounded-lg text-xs font-semibold ml-2 flex-shrink-0">
             <button
               onClick={() => setViewMode('table')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-                viewMode === 'table' ? 'bg-[#00223A] text-white shadow-xs font-bold border border-blue-400/40' : 'text-slate-400 hover:text-white'
+                viewMode === 'table'
+                  ? 'bg-[#00223A] text-white shadow-xs font-bold border border-blue-400/40'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <Table className="w-3.5 h-3.5" />
@@ -606,7 +608,9 @@ export default function App() {
             <button
               onClick={() => setViewMode('cards')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-                viewMode === 'cards' ? 'bg-[#00223A] text-white shadow-xs font-bold border border-blue-400/40' : 'text-slate-400 hover:text-white'
+                viewMode === 'cards'
+                  ? 'bg-[#00223A] text-white shadow-xs font-bold border border-blue-400/40'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -615,7 +619,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Compact Summary Strip */}
+        {/* Resumen */}
         <SummaryCards
           members={members}
           mesas={uniqueMesas}
@@ -624,9 +628,8 @@ export default function App() {
           onEditMesa={handleOpenEditMesa}
         />
 
-        {/* Search & Quick Filter Bar */}
+        {/* Barra de búsqueda */}
         <div className="bg-[#0A111D] rounded-xl p-2 border border-[#16253B] shadow-xs flex items-center gap-2">
-          {/* Search Box */}
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
             <input
@@ -645,8 +648,6 @@ export default function App() {
               </button>
             )}
           </div>
-
-          {/* Filter Status Select */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -660,11 +661,12 @@ export default function App() {
           </select>
         </div>
 
-        {/* Members List (Cards on Mobile, Table on Desktop) */}
+        {/* Lista de miembros */}
         {loading ? (
           <div className="bg-[#0A111D] rounded-xl p-8 text-center border border-[#16253B]">
-            <div className="w-7 h-7 border-3 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            <p className="text-xs font-semibold text-white">Cargando datos en vivo...</p>
+            <div className="w-7 h-7 border-3 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-xs font-semibold text-white">Conectando con la base de datos...</p>
+            <p className="text-[10px] text-slate-500 mt-1">Coordinador: {perfil.nombreCompleto}</p>
           </div>
         ) : (
           <>
@@ -688,10 +690,9 @@ export default function App() {
             )}
           </>
         )}
-
       </main>
 
-      {/* Modal to Edit Mesa Number */}
+      {/* Modales */}
       <EditMesaModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
@@ -699,40 +700,29 @@ export default function App() {
         existingMesas={uniqueMesas}
         onSaveMesaName={handleSaveMesaName}
       />
-
-      {/* Modal to Change Personal PIN */}
       <ChangePinModal
         isOpen={isChangePinOpen}
         onClose={() => setIsChangePinOpen(false)}
-        onPinChanged={() => {
-          showToast('¡Clave personalizada actualizada exitosamente!');
-        }}
+        onPinChanged={() => showToast('¡Clave actualizada correctamente!')}
       />
-
-      {/* Modal for Google Sheets Live Sync */}
       <GoogleSheetsModal
         isOpen={isGoogleSheetsOpen}
         onClose={() => setIsGoogleSheetsOpen(false)}
         members={members}
         onSuccessToast={(msg) => showToast(msg, 'success')}
       />
-
-      {/* Quick Restore / Upload Excel Modal */}
       <QuickRestoreModal
         isOpen={isRestoreModalOpen}
         onClose={() => setIsRestoreModalOpen(false)}
         onRestoreFromExcel={handleRestoreMembersList}
         onRestoreFromText={handleRestoreFromText}
       />
-
-      {/* WhatsApp Message Preview Modal */}
       <WhatsAppModal
         isOpen={isWhatsAppModalOpen}
         onClose={() => setIsWhatsAppModalOpen(false)}
         targetMemberName={previewTarget.nombre}
         targetMemberPhone={previewTarget.celular}
       />
-
     </div>
   );
 }

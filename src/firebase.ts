@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, Firestore, collection, doc } from 'firebase/firestore';
 import {
   getAuth,
   signInWithPopup,
@@ -17,9 +17,25 @@ export const db: Firestore = getFirestore(
   (firebaseConfig as any).firestoreDatabaseId || '(default)'
 );
 
-export const MEMBERS_COLLECTION = 'miembros_mesa';
+// ─── Rutas con scope por coordinador ─────────────────────────────────────────
 
-// Auth & Google Sheets OAuth
+/** Colección de miembros de un coordinador */
+export function getMembersCollectionRef(coordinadorDni: string) {
+  return collection(db, `coordinadores/${coordinadorDni}/miembros`);
+}
+
+/** Documento de un miembro específico de un coordinador */
+export function getMemberDocRef(coordinadorDni: string, memberId: string) {
+  return doc(db, `coordinadores/${coordinadorDni}/miembros`, memberId);
+}
+
+/** Documento del perfil/configuración del coordinador */
+export function getPerfilDocRef(coordinadorDni: string) {
+  return doc(db, `coordinadores/${coordinadorDni}/config`, 'perfil');
+}
+
+// ─── Auth Google (para Google Sheets) ────────────────────────────────────────
+
 export const auth = getAuth(app);
 
 export const GOOGLE_SHEETS_SCOPES = [
