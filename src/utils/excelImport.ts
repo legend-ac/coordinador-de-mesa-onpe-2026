@@ -29,6 +29,13 @@ function normalizeCargo(rawCargo: string): CargoTipo {
   return rawCargo as CargoTipo;
 }
 
+function normalizeMesa(rawMesa: string): MesaId {
+  const value = rawMesa.trim();
+  if (!value) return '' as MesaId;
+  const number = value.match(/\d+/)?.[0];
+  return number ? `Mesa ${number}` : value;
+}
+
 /**
  * Reads an uploaded .xlsx or .xls file and robustly parses table members,
  * supporting both exact ONPE format and custom spreadsheets with columns in any order.
@@ -87,7 +94,7 @@ export async function parseExcelFile(file: File): Promise<Partial<MesaMember>[]>
       return String(cell.value).trim();
     };
 
-    const mesaVal = getVal(colMesa) as MesaId;
+    const mesaVal = normalizeMesa(getVal(colMesa));
     const rawCargo = getVal(colCargo);
     const cargoVal = normalizeCargo(rawCargo);
 

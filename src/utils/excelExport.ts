@@ -82,9 +82,9 @@ export async function generateAndDownloadExcel(members: MesaMember[], fileName =
 
   // Grouping colors for the 3 tables to visually distinguish without saturation
   const mesaColors: Record<string, { bg: string; badgeBg: string; badgeFg: string; border: string }> = {
-    'Mesa 51': { bg: 'FFF8FAFD', badgeBg: 'FFEBF2FA', badgeFg: 'FF0D47A1', border: 'FFBBDEFB' },
-    'Mesa 52': { bg: 'FFFFFFFF', badgeBg: 'FFE8F5E9', badgeFg: 'FF1B5E20', border: 'FFC8E6C9' },
-    'Mesa 53': { bg: 'FFFDFBF7', badgeBg: 'FFF3E5F5', badgeFg: 'FF4A148C', border: 'FFE1BEE7' },
+    'Mesa 51': { bg: 'FFFFFFFF', badgeBg: 'FFF2F2F2', badgeFg: 'FF00223A', border: 'FF00223A' },
+    'Mesa 52': { bg: 'FFFFF7F8', badgeBg: 'FFFFE7EA', badgeFg: 'FFD31027', border: 'FFD31027' },
+    'Mesa 53': { bg: 'FFF5F7F8', badgeBg: 'FFE2E8EB', badgeFg: 'FF00223A', border: 'FF00223A' },
   };
 
   // Add all 27 rows (exactly 9 per mesa)
@@ -183,7 +183,7 @@ export async function generateAndDownloadExcel(members: MesaMember[], fileName =
           name: 'Segoe UI',
           size: 10,
           bold: true,
-          color: { argb: hasPhone ? 'FF008000' : 'FF2563EB' },
+          color: { argb: hasPhone ? 'FF00223A' : 'FFD31027' },
           underline: hasPhone ? true : undefined,
         };
       }
@@ -202,11 +202,11 @@ export async function generateAndDownloadExcel(members: MesaMember[], fileName =
 
         // Static color fill based on current state
         if (member.estadoContacto === 'Confirmado') {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } }; // Green
-          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF166534' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8EB' } };
+          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF00223A' } };
         } else if (member.estadoContacto === 'Pendiente') {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF9C3' } }; // Yellow
-          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF854D0E' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+          cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF0B0B0B' } };
         } else if (member.estadoContacto === 'No responde' || member.estadoContacto === 'Número incorrecto') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // Red
           cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF991B1B' } };

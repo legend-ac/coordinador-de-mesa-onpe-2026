@@ -30,12 +30,8 @@ import { Header } from './components/Header';
 import { SummaryCards } from './components/SummaryCards';
 import { MesaTable } from './components/MesaTable';
 import { MobileCardList } from './components/MobileCardList';
-import { WhatsAppModal } from './components/WhatsAppModal';
 import { EditMesaModal } from './components/EditMesaModal';
-import { ChangePinModal } from './components/ChangePinModal';
-import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { QuickRestoreModal } from './components/QuickRestoreModal';
-import { PWAInstallBanner } from './components/PWAInstallBanner';
 import {
   AlertCircle,
   CheckCircle2,
@@ -48,6 +44,25 @@ import {
 
 const LOCAL_STORAGE_BACKUP_KEY = 'onpe_members_data_backup';
 
+function readLocalMembersBackup(dni: string): MesaMember[] | null {
+  try {
+    const keys = [
+      `${LOCAL_STORAGE_BACKUP_KEY}_${dni}`,
+      LOCAL_STORAGE_BACKUP_KEY,
+      `onpe_members_data_backup_v3_${dni}`,
+    ];
+    for (const key of keys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as MesaMember[];
+    }
+  } catch (error) {
+    console.warn('No se pudo leer la copia local:', error);
+  }
+  return null;
+}
+
 export default function App() {
   const { perfil } = useCoordinator();
 
@@ -55,11 +70,8 @@ export default function App() {
   const [members, setMembers] = useState<MesaMember[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(`${LOCAL_STORAGE_BACKUP_KEY}_${perfil.dni}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
+        const saved = readLocalMembersBackup(perfil.dni);
+        if (saved) return saved;
       } catch (e) {
         console.warn('Error leyendo backup local:', e);
       }
@@ -80,8 +92,6 @@ export default function App() {
   // Modales
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [mesaToEdit, setMesaToEdit] = useState<string>(perfil.mesas[0] || '');
-  const [isChangePinOpen, setIsChangePinOpen] = useState(false);
-  const [isGoogleSheetsOpen, setIsGoogleSheetsOpen] = useState(false);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
 
   // Seguro de datos
@@ -116,13 +126,6 @@ export default function App() {
     type: 'success' | 'info' | 'error';
   } | null>(null);
 
-  // WhatsApp modal
-  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
-  const [previewTarget, setPreviewTarget] = useState<{ nombre: string; celular: string }>({
-    nombre: '',
-    celular: '',
-  });
-
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 3500);
@@ -141,6 +144,11 @@ export default function App() {
       }
     }
   }, [members, perfil.dni]);
+
+  const membersRef = useRef<MesaMember[]>(members);
+  useEffect(() => {
+    membersRef.current = members;
+  }, [members]);
 
   // ── Mesas únicas disponibles ────────────────────────────────────────────────
   const uniqueMesas = useMemo(() => {
@@ -162,7 +170,7 @@ export default function App() {
   const hasInitializedRef = useRef(false);
 
   const initializeFirestoreData = useCallback(
-    async (mesasParaInit: string[]) => {
+    async (mesasParaInit: string[], seedMembers?: MesaMember[]) => {
       if (hasInitializedRef.current) return;
       hasInitializedRef.current = true;
 
@@ -170,7 +178,7 @@ export default function App() {
         setIsSyncing(true);
         setLoading(false);
         const batch = writeBatch(db);
-        const initialMembers = generateInitialMembers(mesasParaInit);
+        const initialMembers = seedMembers?.length ? seedMembers : generateInitialMembers(mesasParaInit);
         initialMembers.forEach((member) => {
           batch.set(getMemberDocRef(perfil.dni, member.id), {
             ...member,
@@ -179,12 +187,12 @@ export default function App() {
         });
         await batch.commit();
         setIsSyncing(false);
-        showToast('Mesas inicializadas y listas.');
+        showToast(seedMembers?.length ? 'Copia local recuperada y sincronizada.' : 'Mesas inicializadas y listas.');
       } catch (err) {
         console.error('Error inicializando Firestore:', err);
         setIsSyncing(false);
         // Fallback: usar datos locales si Firestore falla
-        setMembers(generateInitialMembers(mesasParaInit));
+        setMembers(seedMembers?.length ? seedMembers : generateInitialMembers(mesasParaInit));
         setLoading(false);
         setFirestoreError('Sin conexión a la base de datos. Trabajando en modo offline.');
       }
@@ -218,7 +226,9 @@ export default function App() {
            */
           setLoading(false);
           if (!snapshot.metadata.fromCache) {
-            initializeFirestoreData(perfil.mesas);
+            // Si se cambió de base, la copia local es la fuente para restaurar;
+            // jamás se reemplaza por una plantilla vacía.
+            initializeFirestoreData(perfil.mesas, readLocalMembersBackup(perfil.dni) || membersRef.current);
           }
         } else {
           const loaded: MesaMember[] = [];
@@ -400,7 +410,7 @@ export default function App() {
     try {
       showToast('Generando informe PDF...', 'info');
       const { generateMesaReportPDF } = await import('./utils/pdfExport');
-      await generateMesaReportPDF(members, selectedMesa);
+      await generateMesaReportPDF(members, selectedMesa, perfil);
       showToast('¡Informe PDF descargado!');
     } catch (err) {
       console.error(err);
@@ -468,11 +478,6 @@ export default function App() {
     }
   };
 
-  const openWhatsAppPreview = (nombre: string, celular: string) => {
-    setPreviewTarget({ nombre, celular });
-    setIsWhatsAppModalOpen(true);
-  };
-
   // ── Miembros filtrados para la vista ────────────────────────────────────────
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
@@ -493,7 +498,7 @@ export default function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col antialiased bg-[#050912] text-white">
+    <div className="min-h-screen flex flex-col antialiased bg-[#f5f1ea] text-[#0b0b0b]">
 
       {/* Toast */}
       {toastMessage && (
@@ -503,7 +508,7 @@ export default function App() {
               toastMessage.type === 'error'
                 ? 'bg-[#D31027] text-white border-red-500'
                 : toastMessage.type === 'info'
-                ? 'bg-[#00223A] text-white border-blue-400'
+                ? 'bg-[#00223A] text-white border-[#D31027]'
                 : 'bg-[#00223A] text-white border-red-500'
             }`}
           >
@@ -519,7 +524,7 @@ export default function App() {
 
       {/* Error de Firestore */}
       {firestoreError && (
-        <div className="bg-yellow-900/30 border-b border-yellow-700 text-yellow-300 text-xs py-1.5 px-4 text-center font-medium">
+        <div className="bg-[#00223A] border-b border-[#D31027] text-white text-xs py-1.5 px-4 text-center font-medium">
           ⚠️ {firestoreError}
         </div>
       )}
@@ -529,19 +534,11 @@ export default function App() {
         mesas={uniqueMesas}
         onExportExcel={handleExportExcel}
         onExportPDF={handleExportPDF}
-        onImportExcel={handleImportExcel}
-        onOpenWhatsAppModal={() => setIsWhatsAppModalOpen(true)}
-        onOpenGoogleSheetsModal={() => setIsGoogleSheetsOpen(true)}
         onOpenRestoreModal={() => setIsRestoreModalOpen(true)}
-        onDownloadZip={handleDownloadZip}
-        onResetData={handleResetData}
         isSyncing={isSyncing}
-        onOpenChangePin={() => setIsChangePinOpen(true)}
         isReadOnly={isReadOnly}
         onToggleReadOnly={toggleReadOnly}
       />
-
-      <PWAInstallBanner />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-6 py-2.5 sm:py-4 space-y-2.5 sm:space-y-4">
 
@@ -575,7 +572,7 @@ export default function App() {
                     onClick={() => setSelectedMesa(m)}
                     className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center truncate cursor-pointer ${
                       isSelected
-                        ? 'bg-[#00223A] text-white border border-blue-400 shadow-xs'
+                        ? 'bg-[#D31027] text-white border border-[#D31027] shadow-xs'
                         : 'text-slate-400 hover:text-white hover:bg-[#001726]'
                     }`}
                   >
@@ -601,7 +598,7 @@ export default function App() {
               onClick={() => setSelectedMesa('TODAS')}
               className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex-shrink-0 ${
                 selectedMesa === 'TODAS'
-                  ? 'bg-[#00223A] text-white border border-blue-400 shadow-xs'
+                  ? 'bg-[#D31027] text-white border border-[#D31027] shadow-xs'
                   : 'text-slate-400 hover:text-white hover:bg-[#001726]'
               }`}
             >
@@ -615,7 +612,7 @@ export default function App() {
               onClick={() => setViewMode('table')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                 viewMode === 'table'
-                  ? 'bg-[#00223A] text-white shadow-xs font-bold border border-blue-400/40'
+                  ? 'bg-[#D31027] text-white shadow-xs font-bold border border-[#D31027]'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -626,7 +623,7 @@ export default function App() {
               onClick={() => setViewMode('cards')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                 viewMode === 'cards'
-                  ? 'bg-[#00223A] text-white shadow-xs font-bold border border-blue-400/40'
+                  ? 'bg-[#D31027] text-white shadow-xs font-bold border border-[#D31027]'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -700,7 +697,7 @@ export default function App() {
                 selectedMesa={selectedMesa}
                 onSelectMesa={setSelectedMesa}
                 onUpdateMember={handleUpdateMember}
-                onPreviewWhatsApp={openWhatsAppPreview}
+                onPreviewWhatsApp={() => {}}
                 onOpenEditMesa={handleOpenEditMesa}
                 isReadOnly={isReadOnly}
               />
@@ -717,28 +714,10 @@ export default function App() {
         existingMesas={uniqueMesas}
         onSaveMesaName={handleSaveMesaName}
       />
-      <ChangePinModal
-        isOpen={isChangePinOpen}
-        onClose={() => setIsChangePinOpen(false)}
-        onPinChanged={() => showToast('¡Clave actualizada correctamente!')}
-      />
-      <GoogleSheetsModal
-        isOpen={isGoogleSheetsOpen}
-        onClose={() => setIsGoogleSheetsOpen(false)}
-        members={members}
-        onSuccessToast={(msg) => showToast(msg, 'success')}
-      />
       <QuickRestoreModal
         isOpen={isRestoreModalOpen}
         onClose={() => setIsRestoreModalOpen(false)}
         onRestoreFromExcel={handleRestoreMembersList}
-        onRestoreFromText={handleRestoreFromText}
-      />
-      <WhatsAppModal
-        isOpen={isWhatsAppModalOpen}
-        onClose={() => setIsWhatsAppModalOpen(false)}
-        targetMemberName={previewTarget.nombre}
-        targetMemberPhone={previewTarget.celular}
       />
     </div>
   );

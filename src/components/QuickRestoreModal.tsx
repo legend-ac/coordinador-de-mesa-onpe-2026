@@ -13,8 +13,7 @@ import { parseExcelFile } from '../utils/excelImport';
 interface QuickRestoreModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onRestoreFromExcel: (members: Partial<MesaMember>[]) => void;
-  onRestoreFromText: (text: string) => void;
+  onRestoreFromExcel: (members: Partial<MesaMember>[]) => Promise<void>;
 }
 
 export const QuickRestoreModal: React.FC<QuickRestoreModalProps> = ({
@@ -60,7 +59,7 @@ export const QuickRestoreModal: React.FC<QuickRestoreModalProps> = ({
         setIsProcessing(false);
         return;
       }
-      onRestoreFromExcel(rows);
+      await onRestoreFromExcel(rows);
       setSuccessMsg(`¡${rows.length} registros cargados y colocados automáticamente en tus mesas!`);
       setTimeout(() => {
         onClose();

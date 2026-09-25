@@ -1,7 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { MesaMember } from '../types';
-import { COORDINADOR_INFO } from './whatsapp';
+import { CoordinadorPerfil, MesaMember } from '../types';
 
 /**
  * Generates an official, printable ONPE PDF report for Mesa Coordinator Andy Córdova.
@@ -9,7 +8,8 @@ import { COORDINADOR_INFO } from './whatsapp';
  */
 export async function generateMesaReportPDF(
   members: MesaMember[],
-  activeMesaFilter: string = 'TODAS'
+  activeMesaFilter: string = 'TODAS',
+  coordinator?: CoordinadorPerfil,
 ): Promise<void> {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -58,12 +58,12 @@ export async function generateMesaReportPDF(
   doc.setFont('helvetica', 'bold');
   doc.text(`COORDINADOR DE MESA:`, 18, currentY + 6);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${COORDINADOR_INFO.nombre} (DNI: ${COORDINADOR_INFO.dni})`, 63, currentY + 6);
+  doc.text(`${coordinator?.nombreCompleto || 'No registrado'} (DNI: ${coordinator?.dni || 'No registrado'})`, 63, currentY + 6);
 
   doc.setFont('helvetica', 'bold');
   doc.text(`CONTACTO OFICIAL:`, 18, currentY + 11);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${COORDINADOR_INFO.telefonoContacto} • andyc9750@gmail.com`, 63, currentY + 11);
+  doc.text(`${coordinator?.celular || 'No registrado'} · Coordinador de Mesa`, 63, currentY + 11);
 
   doc.setFont('helvetica', 'bold');
   doc.text(`MESAS A CARGO:`, 18, currentY + 16);
@@ -222,7 +222,7 @@ export async function generateMesaReportPDF(
     doc.setFontSize(7);
     doc.setTextColor(148, 163, 184);
     doc.text(
-      `ONPE - Elecciones Regionales y Municipales 2026 • Coordinador: ${COORDINADOR_INFO.nombre}`,
+      `ONPE - Elecciones Regionales y Municipales 2026 · Coordinador: ${coordinator?.nombreCompleto || 'No registrado'}`,
       14,
       pageHeight - 11
     );
@@ -236,14 +236,15 @@ export async function generateMesaReportPDF(
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(51, 65, 85);
-      doc.text(`${COORDINADOR_INFO.nombre}`, pageWidth / 2, sigY + 4, { align: 'center' });
+      doc.text(`${coordinator?.nombreCompleto || 'Coordinador de Mesa'}`, pageWidth / 2, sigY + 4, { align: 'center' });
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
-      doc.text(`Coordinador de Mesa ONPE - DNI ${COORDINADOR_INFO.dni}`, pageWidth / 2, sigY + 7.5, { align: 'center' });
+      doc.text(`Coordinador de Mesa ONPE - DNI ${coordinator?.dni || 'No registrado'}`, pageWidth / 2, sigY + 7.5, { align: 'center' });
     }
   }
 
   // Save the PDF
-  const filename = `Informe_Oficial_Mesas_ONPE_${COORDINADOR_INFO.nombre.replace(/\s+/g, '_')}.pdf`;
+  const safeName = (coordinator?.nombreCompleto || 'Coordinador').replace(/\s+/g, '_');
+  const filename = `Informe_Oficial_Mesas_ONPE_${safeName}.pdf`;
   doc.save(filename);
 }

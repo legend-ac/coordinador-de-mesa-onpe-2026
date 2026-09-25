@@ -13,9 +13,14 @@ import { CoordinatorProvider } from '../context/CoordinatorContext';
 // Firestore solo se usa al registrarse por primera vez, con fallback offline.
 
 const CACHE_KEY = 'onpe_coord_v4';
+const LEGACY_CACHE_KEYS = ['onpe_coord_profile_v3', 'onpe_coordinator_profile'];
 
 function readCache(): CoordinadorPerfil | null {
-  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); }
+  try {
+    const stored = localStorage.getItem(CACHE_KEY)
+      || LEGACY_CACHE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
+    return stored ? JSON.parse(stored) : null;
+  }
   catch { return null; }
 }
 
@@ -30,6 +35,7 @@ export function updateCachedCoordinator(changes: Partial<CoordinadorPerfil>) {
 
 export const logoutSecuritySession = () => {
   localStorage.removeItem(CACHE_KEY);
+  LEGACY_CACHE_KEYS.forEach((key) => localStorage.removeItem(key));
   sessionStorage.clear();
   window.location.reload();
 };
