@@ -1,0 +1,8 @@
+{
+  "name": "Coordinador de Mesa - ONPE 2026",
+  "description": "Sistema y plantilla Excel automatizada para Coordinadores de Mesa ONPE: gestión de miembros de mesas 51, 52 y 53, contacto por WhatsApp en tiempo real y exportación Excel (.xlsx).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
