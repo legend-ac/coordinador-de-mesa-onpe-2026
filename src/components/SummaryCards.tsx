@@ -35,38 +35,38 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   return (
     <>
       {/* 1. MOBILE COMPACT METRICS STRIP (Pure ONPE: Red, White, Navy, Black) */}
-      <div className="sm:hidden bg-[#0A111D] rounded-xl p-2.5 border border-[#16253B] shadow-xs mb-3 text-white">
-        <div className="grid grid-cols-3 gap-2 text-center divide-x divide-[#16253B]">
+      <div className="sm:hidden bg-white rounded-xl p-3 border border-[#00223A]/25 shadow-sm mb-3 text-[#00223A]">
+        <div className="grid grid-cols-3 gap-2 text-center divide-x divide-[#00223A]/15">
           {/* Con Celular */}
           <div className="flex flex-col items-center">
-            <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1 uppercase tracking-tight">
-              <Phone className="w-3 h-3 text-white" />
+            <span className="text-[10px] text-[#00223A] font-bold flex items-center gap-1 uppercase tracking-tight">
+              <Phone className="w-3 h-3 text-[#00223A]" />
               Con Celular
             </span>
-            <span className="text-sm font-black text-white mt-0.5">
-              {activeMetrics.withPhone} <span className="text-[10px] text-slate-400 font-normal">/ {activeMetrics.total}</span>
+            <span className="text-sm font-black text-[#00223A] mt-0.5">
+              {activeMetrics.withPhone} <span className="text-[10px] text-black/50 font-normal">/ {activeMetrics.total}</span>
             </span>
           </div>
 
           {/* Confirmados */}
           <div className="flex flex-col items-center">
-            <span className="text-[10px] text-red-400 font-bold flex items-center gap-1 uppercase tracking-tight">
-              <CheckCircle className="w-3 h-3 text-red-500" />
+            <span className="text-[10px] text-[#D31027] font-bold flex items-center gap-1 uppercase tracking-tight">
+              <CheckCircle className="w-3 h-3 text-[#D31027]" />
               Confirmados
             </span>
-            <span className="text-sm font-black text-white mt-0.5">
-              {activeMetrics.confirmed} <span className="text-[10px] text-slate-400 font-normal">/ {activeMetrics.total}</span>
+            <span className="text-sm font-black text-[#D31027] mt-0.5">
+              {activeMetrics.confirmed} <span className="text-[10px] text-black/50 font-normal">/ {activeMetrics.total}</span>
             </span>
           </div>
 
           {/* Verificados */}
           <div className="flex flex-col items-center">
-            <span className="text-[10px] text-slate-300 font-bold flex items-center gap-1 uppercase tracking-tight">
-              <ShieldCheck className="w-3 h-3 text-white" />
+            <span className="text-[10px] text-[#00223A] font-bold flex items-center gap-1 uppercase tracking-tight">
+              <ShieldCheck className="w-3 h-3 text-[#00223A]" />
               Verificados
             </span>
-            <span className="text-sm font-black text-white mt-0.5">
-              {activeMetrics.verified} <span className="text-[10px] text-slate-400 font-normal">/ {activeMetrics.total}</span>
+            <span className="text-sm font-black text-[#00223A] mt-0.5">
+              {activeMetrics.verified} <span className="text-[10px] text-black/50 font-normal">/ {activeMetrics.total}</span>
             </span>
           </div>
         </div>
@@ -86,11 +86,11 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               className={`rounded-xl p-3.5 border transition-all cursor-pointer shadow-xs ${
                 isSelected
                   ? 'bg-[#00223A] border-red-500 ring-2 ring-red-500/50 text-white'
-                  : 'bg-[#0A111D] border-[#16253B] hover:border-[#00223A] text-slate-200'
+                  : 'bg-white border-[#00223A]/25 hover:border-[#00223A] text-[#00223A]'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-black px-2 py-0.5 rounded bg-[#001726] border border-[#213555] text-white truncate max-w-[130px]">
+                <span className="text-xs font-black px-2 py-0.5 rounded bg-[#f5f1ea] border border-[#00223A]/20 text-[#00223A] truncate max-w-[130px]">
                   {mesa}
                 </span>
                 <span className="text-xs font-bold text-red-400">
@@ -99,17 +99,17 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               </div>
 
               <div className="space-y-1 text-xs">
-                <div className="flex justify-between text-slate-400">
+                <div className="flex justify-between text-black/60">
                   <span>Con Celular:</span>
-                  <span className="font-bold text-white">{stats.withPhone} / {mesaMembers.length || 9}</span>
+                  <span className="font-bold text-[#00223A]">{stats.withPhone} / {mesaMembers.length || 9}</span>
                 </div>
-                <div className="flex justify-between text-slate-400">
+                <div className="flex justify-between text-black/60">
                   <span>Confirmados:</span>
-                  <span className="font-bold text-white">{stats.confirmed} / {mesaMembers.length || 9}</span>
+                  <span className="font-bold text-[#00223A]">{stats.confirmed} / {mesaMembers.length || 9}</span>
                 </div>
-                <div className="flex justify-between text-slate-400">
+                <div className="flex justify-between text-black/60">
                   <span>Verificados:</span>
-                  <span className="font-bold text-white">{stats.verified} / {mesaMembers.length || 9}</span>
+                  <span className="font-bold text-[#00223A]">{stats.verified} / {mesaMembers.length || 9}</span>
                 </div>
               </div>
             </div>
@@ -122,30 +122,30 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           className={`rounded-xl p-3.5 border transition-all cursor-pointer shadow-xs ${
             selectedMesa === 'TODAS'
               ? 'bg-[#00223A] border-red-500 ring-2 ring-red-500/50 text-white'
-              : 'bg-[#001726] border-[#16253B] text-white hover:border-[#00223A]'
+              : 'bg-white border-[#00223A]/25 text-[#00223A] hover:border-[#00223A]'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-black uppercase text-red-400">
+            <span className="text-xs font-black uppercase text-[#D31027]">
               Total ({mesas.length} Mesas)
             </span>
-            <span className="text-xs font-bold text-white">
+            <span className="text-xs font-bold text-[#00223A]">
               {totalMetrics.confirmed}/{totalMetrics.total} Conf.
             </span>
           </div>
 
-          <div className="space-y-1 text-xs text-slate-300">
+          <div className="space-y-1 text-xs text-black/60">
             <div className="flex justify-between">
               <span>Total con celular:</span>
-              <span className="font-bold text-white">{totalMetrics.withPhone} / {totalMetrics.total}</span>
+              <span className="font-bold text-[#00223A]">{totalMetrics.withPhone} / {totalMetrics.total}</span>
             </div>
             <div className="flex justify-between">
               <span>Total confirmados:</span>
-              <span className="font-bold text-red-400">{totalMetrics.confirmed} / {totalMetrics.total}</span>
+              <span className="font-bold text-[#D31027]">{totalMetrics.confirmed} / {totalMetrics.total}</span>
             </div>
             <div className="flex justify-between">
               <span>Total verificados:</span>
-              <span className="font-bold text-white">{totalMetrics.verified} / {totalMetrics.total}</span>
+              <span className="font-bold text-[#00223A]">{totalMetrics.verified} / {totalMetrics.total}</span>
             </div>
           </div>
         </div>

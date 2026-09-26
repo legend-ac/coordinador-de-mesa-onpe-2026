@@ -114,9 +114,7 @@ export default function App() {
   };
 
   // Vista
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>(() =>
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 'cards' : 'table'
-  );
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
 
   // Búsqueda y filtros
   const [searchQuery, setSearchQuery] = useState('');
@@ -421,7 +419,7 @@ export default function App() {
     try {
       showToast('Generando Excel...', 'info');
       const { generateAndDownloadExcel } = await import('./utils/excelExport');
-      await generateAndDownloadExcel(members, `Control_Mesas_ONPE_${perfil.dni}.xlsx`);
+      await generateAndDownloadExcel(members, `Control_Mesas_ONPE_${perfil.dni}.xlsx`, perfil);
       showToast('¡Excel descargado!');
     } catch (err) {
       console.error(err);
@@ -538,19 +536,19 @@ export default function App() {
         onToggleReadOnly={toggleReadOnly}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-6 py-2.5 sm:py-4 space-y-2.5 sm:space-y-4">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4">
 
         {/* Banner seguro */}
         {isReadOnly && (
-          <div className="bg-[#00223A] border border-red-500/80 rounded-xl p-2.5 px-3.5 flex items-center justify-between gap-2">
+          <div className="bg-white border-2 border-[#D31027] rounded-xl p-3 px-3.5 flex items-center justify-between gap-2 text-[#00223A]">
             <div className="flex items-center gap-2 text-xs font-bold">
-              <ShieldCheck className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <ShieldCheck className="w-4 h-4 text-[#D31027] flex-shrink-0" />
               <span><strong>Seguro Global Activo:</strong> Datos protegidos contra cambios accidentales.</span>
             </div>
             <button
               type="button"
               onClick={toggleReadOnly}
-              className="text-xs font-black underline hover:text-red-400 flex-shrink-0 cursor-pointer"
+              className="text-xs font-black underline text-[#D31027] hover:text-[#8c0a1a] flex-shrink-0 cursor-pointer"
             >
               Desbloquear
             </button>
@@ -558,7 +556,7 @@ export default function App() {
         )}
 
         {/* Selector de mesa */}
-        <div className="bg-[#0A111D] rounded-xl p-1.5 border border-[#16253B] shadow-xs flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
+        <div className="bg-white rounded-xl p-1.5 border border-[#00223A]/25 shadow-sm flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
           <div className="flex items-center gap-1 flex-1 min-w-0">
             {uniqueMesas.map((m) => {
               const count = members.filter((x) => x.mesa === m).length;
@@ -571,11 +569,11 @@ export default function App() {
                     className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center truncate cursor-pointer ${
                       isSelected
                         ? 'bg-[#D31027] text-white border border-[#D31027] shadow-xs'
-                        : 'text-slate-400 hover:text-white hover:bg-[#001726]'
+                        : 'text-[#00223A] hover:text-[#00223A] hover:bg-[#f5f1ea]'
                     }`}
                   >
                     <span className="truncate">{m}</span>
-                    <span className={`ml-1 text-[10px] font-mono opacity-80 ${isSelected ? 'text-red-400 font-bold' : 'text-slate-500'}`}>
+                    <span className={`ml-1 text-[10px] font-mono opacity-80 ${isSelected ? 'text-white font-bold' : 'text-black/55'}`}>
                       ({conf}/{count})
                     </span>
                   </button>
@@ -605,13 +603,13 @@ export default function App() {
           </div>
 
           {/* Switcher vista */}
-          <div className="hidden sm:inline-flex p-0.5 bg-[#001726] border border-[#16253B] rounded-lg text-xs font-semibold ml-2 flex-shrink-0">
+          <div className="hidden sm:inline-flex p-0.5 bg-[#f5f1ea] border border-[#00223A]/20 rounded-lg text-xs font-semibold ml-2 flex-shrink-0">
             <button
               onClick={() => setViewMode('table')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                 viewMode === 'table'
                   ? 'bg-[#D31027] text-white shadow-xs font-bold border border-[#D31027]'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-[#00223A] hover:bg-white'
               }`}
             >
               <Table className="w-3.5 h-3.5" />
@@ -622,7 +620,7 @@ export default function App() {
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                 viewMode === 'cards'
                   ? 'bg-[#D31027] text-white shadow-xs font-bold border border-[#D31027]'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-[#00223A] hover:bg-white'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -641,20 +639,20 @@ export default function App() {
         />
 
         {/* Barra de búsqueda */}
-        <div className="bg-[#0A111D] rounded-xl p-2 border border-[#16253B] shadow-xs flex items-center gap-2">
+        <div className="bg-white rounded-xl p-2.5 border border-[#00223A]/25 shadow-sm flex items-center gap-2">
           <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-[#00223A]/60 absolute left-2.5 top-2.5" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar por nombre, DNI, celular..."
-              className="w-full pl-8 pr-7 py-1 text-xs bg-[#050912] text-white border border-[#16253B] rounded-lg focus:outline-none focus:border-red-500 placeholder:text-slate-500"
+              className="w-full pl-8 pr-7 py-2 text-xs bg-white text-black border border-[#00223A]/30 rounded-lg focus:outline-none focus:border-[#D31027] placeholder:text-black/45"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1.5 text-xs text-slate-400 hover:text-white font-bold cursor-pointer"
+                className="absolute right-2 top-2 text-xs text-black/50 hover:text-black font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -663,7 +661,7 @@ export default function App() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs bg-[#050912] text-white border border-[#16253B] rounded-lg px-2 py-1 focus:outline-none"
+            className="text-xs bg-white text-black border border-[#00223A]/30 rounded-lg px-2 py-2 focus:outline-none focus:border-[#D31027]"
           >
             <option value="TODOS">Todos los estados</option>
             <option value="Pendiente">Pendientes</option>
@@ -675,10 +673,10 @@ export default function App() {
 
         {/* Lista de miembros */}
         {loading ? (
-          <div className="bg-[#0A111D] rounded-xl p-8 text-center border border-[#16253B]">
+          <div className="bg-white rounded-xl p-8 text-center border border-[#00223A]/25">
             <div className="w-7 h-7 border-3 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-            <p className="text-xs font-semibold text-white">Conectando con la base de datos...</p>
-            <p className="text-[10px] text-slate-500 mt-1">Coordinador: {perfil.nombreCompleto}</p>
+            <p className="text-xs font-semibold text-[#00223A]">Conectando con la base de datos...</p>
+            <p className="text-[10px] text-black/55 mt-1">Coordinador: {perfil.nombreCompleto}</p>
           </div>
         ) : (
           <>

@@ -1,15 +1,25 @@
 import ExcelJS from 'exceljs';
-import { MesaMember, MESAS_DISPONIBLES } from '../types';
-import { formatPeruPhone, getWhatsAppUrl, COORDINADOR_INFO } from './whatsapp';
+import { CoordinadorPerfil, MesaMember } from '../types';
+import { CoordinadorWAInfo, formatPeruPhone, getWhatsAppUrl } from './whatsapp';
 
 /**
  * Creates and downloads a fully automated, beautifully styled Excel (.xlsx) file
  * tailored for Andy Cordova - ONPE Table Coordinator ERM 2026.
  */
-export async function generateAndDownloadExcel(members: MesaMember[], fileName = 'Control_Mesas_ONPE_Andy_Cordova.xlsx') {
+export async function generateAndDownloadExcel(
+  members: MesaMember[],
+  fileName = 'Control_Mesas_ONPE.xlsx',
+  coordinator?: CoordinadorPerfil,
+) {
+  const coordinatorInfo: CoordinadorWAInfo = {
+    nombre: coordinator?.nombreCompleto || 'Coordinador de mesa',
+    dni: coordinator?.dni || '',
+    celular: coordinator?.celular || '',
+    oficina: coordinator?.oficina,
+  };
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = `${COORDINADOR_INFO.nombre} - Coordinador ONPE`;
-  workbook.lastModifiedBy = `${COORDINADOR_INFO.nombre} - Coordinador ONPE`;
+  workbook.creator = `${coordinatorInfo.nombre} - Coordinador ONPE`;
+  workbook.lastModifiedBy = `${coordinatorInfo.nombre} - Coordinador ONPE`;
   workbook.created = new Date();
   workbook.modified = new Date();
 
@@ -97,7 +107,7 @@ export async function generateAndDownloadExcel(members: MesaMember[], fileName =
     const hasPhone = cleanPhone && cleanPhone.length >= 9;
 
     // Direct link if phone is present
-    const directUrl = hasPhone ? getWhatsAppUrl(member.celular, member.nombreCompleto) : null;
+    const directUrl = hasPhone ? getWhatsAppUrl(member.celular, member.nombreCompleto, coordinatorInfo) : null;
 
     // Excel Dynamic Formula for WhatsApp button:
     // Takes Celular from column E and Nombre from column C of the exact same row:
@@ -331,7 +341,7 @@ export async function generateAndDownloadExcel(members: MesaMember[], fileName =
   // Subtitle
   summarySheet.mergeCells('A2:E2');
   const subTitleCell = summarySheet.getCell('A2');
-  subTitleCell.value = `Coordinador: Andy Cordova  |  Jornada Electoral: 4 de Octubre  |  Total Mesas: 3 (51, 52 y 53)`;
+  subTitleCell.value = `Coordinador: ${coordinatorInfo.nombre}  |  Jornada Electoral: 4 de Octubre  |  Mesas: ${Array.from(new Set(members.map((member) => member.mesa))).join(', ') || 'Sin asignar'}`;
   subTitleCell.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF475569' } };
   subTitleCell.alignment = { vertical: 'middle', horizontal: 'center' };
   summarySheet.getRow(2).height = 22;

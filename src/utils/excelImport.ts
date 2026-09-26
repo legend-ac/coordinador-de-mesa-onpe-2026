@@ -59,12 +59,20 @@ export async function parseExcelFile(file: File): Promise<Partial<MesaMember>[]>
   let colEstado = 7;
   let colObs = 8;
   let colVerif = 9;
+  let hasMesaHeader = false;
+  let hasCargoHeader = false;
 
   const headerRow = worksheet.getRow(1);
   headerRow.eachCell((cell, colNum) => {
     const val = normalizeHeader(String(cell.value || ''));
-    if (val.includes('mesa')) colMesa = colNum;
-    else if (val.includes('cargo') || val.includes('condicion')) colCargo = colNum;
+    if (val.includes('mesa')) {
+      colMesa = colNum;
+      hasMesaHeader = true;
+    }
+    else if (val.includes('cargo') || val.includes('condicion')) {
+      colCargo = colNum;
+      hasCargoHeader = true;
+    }
     else if (val.includes('nombre') || val.includes('apellidos') || val.includes('titular')) colNombre = colNum;
     else if (val.includes('dni') || val.includes('documento')) colDni = colNum;
     else if (val.includes('celular') || val.includes('telefono') || val.includes('movil')) colCelular = colNum;
@@ -72,6 +80,10 @@ export async function parseExcelFile(file: File): Promise<Partial<MesaMember>[]>
     else if (val.includes('observ') || val.includes('nota')) colObs = colNum;
     else if (val.includes('verif')) colVerif = colNum;
   });
+
+  if (!hasMesaHeader || !hasCargoHeader) {
+    throw new Error('Usa la Plantilla Excel descargada desde la aplicación: deben existir las columnas Mesa y Cargo / condición.');
+  }
 
   const results: Partial<MesaMember>[] = [];
 
@@ -129,6 +141,10 @@ export async function parseExcelFile(file: File): Promise<Partial<MesaMember>[]>
       });
     }
   });
+
+  if (results.length === 0) {
+    throw new Error('El archivo no contiene filas para importar.');
+  }
 
   return results;
 }

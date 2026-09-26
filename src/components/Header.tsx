@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
         <nav aria-label="Acciones principales" className="mt-3 grid grid-cols-3 gap-2">
           <button type="button" onClick={onOpenRestoreModal} className="action-primary"><Upload className="h-4 w-4" /><span>Subir Excel</span></button>
           <button type="button" onClick={onExportPDF} className="action-secondary"><FileText className="h-4 w-4" /><span>Informe PDF</span></button>
-          <button type="button" onClick={onExportExcel} className="action-secondary"><FileSpreadsheet className="h-4 w-4" /><span>Descargar</span><FileDown className="hidden h-3.5 w-3.5 sm:block" /></button>
+          <button type="button" onClick={onExportExcel} className="action-secondary"><FileSpreadsheet className="h-4 w-4" /><span>Plantilla Excel</span><FileDown className="hidden h-3.5 w-3.5 sm:block" /></button>
         </nav>
       </div>
     </header>
