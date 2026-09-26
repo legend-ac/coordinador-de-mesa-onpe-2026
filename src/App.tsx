@@ -301,8 +301,6 @@ export default function App() {
           if (item.id && item.id === current.id) return true;
           return item.mesa === current.mesa && item.cargo === current.cargo;
         });
-        if (!match && incomingMembers[index]) match = incomingMembers[index];
-
         if (match) {
           const merged: Partial<MesaMember> = {
             nombreCompleto: match.nombreCompleto ?? current.nombreCompleto,
